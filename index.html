@@ -1,0 +1,741 @@
+
+
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>سیستم مدیریت چک بانکی</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @font-face {
+            font-family: 'Vazir';
+            src: url('https://cdn.jsdelivr.net/gh/rastikerdar/vazir-font@v30.1.0/dist/Vazir.woff2') format('woff2');
+            font-weight: normal;
+            font-style: normal;
+        }
+        body {
+            font-family: 'Vazir', sans-serif;
+            background-color: #f0f9ff;
+        }
+        .number-to-persian {
+            direction: rtl;
+        }
+        .date-picker {
+            position: relative;
+        }
+        .date-picker-calendar {
+            display: none;
+            position: absolute;
+            top: 100%;
+            right: 0;
+            z-index: 10;
+            background: white;
+            border: 1px solid #e2e8f0;
+            border-radius: 0.5rem;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            padding: 1rem;
+            width: 300px;
+            margin-top: 0.5rem;
+        }
+        .date-picker-calendar.show {
+            display: block;
+        }
+        .calendar-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.5rem;
+        }
+        .calendar-days {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 0.25rem;
+            text-align: center;
+        }
+        .calendar-day-name {
+            font-weight: bold;
+            color: #4f46e5;
+            padding: 0.25rem;
+        }
+        .calendar-day {
+            padding: 0.5rem;
+            cursor: pointer;
+            border-radius: 0.25rem;
+        }
+        .calendar-day:hover {
+            background-color: #e0e7ff;
+        }
+        .calendar-day.selected {
+            background-color: #4f46e5;
+            color: white;
+        }
+        .calendar-day.today {
+            border: 1px solid #4f46e5;
+        }
+        .calendar-day.other-month {
+            color: #9ca3af;
+        }
+        .toast {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 12px 24px;
+            border-radius: 8px;
+            color: white;
+            font-weight: bold;
+            z-index: 1000;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+        .toast.success {
+            background-color: #10b981;
+        }
+        .toast.error {
+            background-color: #ef4444;
+        }
+        .toast.show {
+            opacity: 1;
+        }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-blue-50 to-indigo-100 min-h-screen">
+    <div id="toast" class="toast"></div>
+    
+    <div class="container mx-auto px-4 py-8">
+        <header class="text-center mb-8">
+            <h1 class="text-3xl font-bold text-indigo-800 mb-2">سیستم مدیریت چک بانکی</h1>
+            <p class="text-gray-600">ثبت و مدیریت چک‌های بانکی به همراه محاسبه میانگین پس‌انداز</p>
+        </header>
+
+        <div class="bg-white rounded-lg shadow-lg p-6 mb-8">
+            <h2 class="text-xl font-bold text-indigo-700 mb-4">ثبت چک جدید</h2>
+            <form id="checkForm" class="space-y-4">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div class="date-picker">
+                        <label class="block text-gray-700 mb-2" for="date">تاریخ سررسید چک</label>
+                        <input type="text" id="date" class="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500" readonly required>
+                        <div id="datePickerCalendar" class="date-picker-calendar">
+                            <div class="calendar-header">
+                                <button type="button" id="prevMonth" class="text-indigo-600 hover:text-indigo-800">&lt;</button>
+                                <span id="currentMonthYear" class="font-bold"></span>
+                                <button type="button" id="nextMonth" class="text-indigo-600 hover:text-indigo-800">&gt;</button>
+                            </div>
+                            <div class="calendar-days" id="calendarDays">
+                                <!-- روزهای هفته -->
+                                <div class="calendar-day-name">ش</div>
+                                <div class="calendar-day-name">ی</div>
+                                <div class="calendar-day-name">د</div>
+                                <div class="calendar-day-name">س</div>
+                                <div class="calendar-day-name">چ</div>
+                                <div class="calendar-day-name">پ</div>
+                                <div class="calendar-day-name">ج</div>
+                                <!-- روزهای ماه اینجا اضافه می‌شوند -->
+                            </div>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-gray-700 mb-2" for="amount">مبلغ چک (ریال)</label>
+                        <input type="number" id="amount" class="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="مثال: 10000000" required>
+                        <p id="amountInWords" class="mt-2 text-sm text-gray-600"></p>
+                    </div>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-gray-700 mb-2" for="issuer">صادر کننده چک</label>
+                        <input type="text" id="issuer" class="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="نام صادر کننده" required>
+                    </div>
+                    <div>
+                        <label class="block text-gray-700 mb-2" for="receiver">دریافت کننده چک</label>
+                        <input type="text" id="receiver" class="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="نام دریافت کننده" required>
+                    </div>
+                </div>
+                <div class="flex justify-center">
+                    <button type="submit" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-6 rounded-md transition duration-300 shadow-md">
+                        ثبت چک
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <div class="bg-white rounded-lg shadow-lg p-6 mb-8">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-xl font-bold text-indigo-700">لیست چک‌های ثبت شده</h2>
+                <button id="clearAllChecks" class="bg-red-500 hover:bg-red-600 text-white py-1 px-3 rounded-md text-sm transition duration-300">
+                    حذف همه چک‌ها
+                </button>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="min-w-full bg-white">
+                    <thead>
+                        <tr class="bg-indigo-100 text-indigo-800">
+                            <th class="py-3 px-4 text-right">ردیف</th>
+                            <th class="py-3 px-4 text-right">تاریخ سررسید</th>
+                            <th class="py-3 px-4 text-right">صادر کننده</th>
+                            <th class="py-3 px-4 text-right">دریافت کننده</th>
+                            <th class="py-3 px-4 text-right">مبلغ (ریال)</th>
+                            <th class="py-3 px-4 text-right">مبلغ به حروف</th>
+                            <th class="py-3 px-4 text-right">عملیات</th>
+                        </tr>
+                    </thead>
+                    <tbody id="checksList">
+                        <!-- چک‌ها اینجا اضافه می‌شوند -->
+                    </tbody>
+                </table>
+            </div>
+            <div id="noChecks" class="text-center py-4 text-gray-500">
+                هنوز چکی ثبت نشده است.
+            </div>
+        </div>
+
+        <div class="bg-white rounded-lg shadow-lg p-6">
+            <h2 class="text-xl font-bold text-indigo-700 mb-4">آمار و تحلیل</h2>
+            <div id="statsContainer" class="hidden">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                    <div class="bg-indigo-50 p-4 rounded-lg border border-indigo-200">
+                        <h3 class="text-lg font-semibold text-indigo-700 mb-2">تعداد کل چک‌ها</h3>
+                        <p id="totalChecks" class="text-2xl font-bold text-indigo-800">0</p>
+                    </div>
+                    <div class="bg-indigo-50 p-4 rounded-lg border border-indigo-200">
+                        <h3 class="text-lg font-semibold text-indigo-700 mb-2">مجموع مبالغ</h3>
+                        <p id="totalAmount" class="text-2xl font-bold text-indigo-800">0 ریال</p>
+                    </div>
+                    <div class="bg-indigo-50 p-4 rounded-lg border border-indigo-200">
+                        <h3 class="text-lg font-semibold text-indigo-700 mb-2">میانگین مبلغ چک‌ها</h3>
+                        <p id="averageAmount" class="text-2xl font-bold text-indigo-800">0 ریال</p>
+                    </div>
+                </div>
+            </div>
+
+            <div id="personStats" class="hidden mt-6 p-5 bg-blue-50 rounded-lg border border-blue-200">
+                <h3 class="text-lg font-semibold text-blue-800 mb-4">آمار چک‌های مشترک</h3>
+                <div class="mb-3">
+                    <p class="font-medium text-blue-700">صادر کننده / دریافت کننده: <span id="personName" class="font-bold"></span></p>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div class="bg-white p-4 rounded-lg border border-blue-200">
+                        <h4 class="text-md font-semibold text-blue-700 mb-2">تعداد چک‌ها</h4>
+                        <p id="personTotalChecks" class="text-xl font-bold text-blue-800">0</p>
+                    </div>
+                    <div class="bg-white p-4 rounded-lg border border-blue-200">
+                        <h4 class="text-md font-semibold text-blue-700 mb-2">مجموع مبالغ</h4>
+                        <p id="personTotalAmount" class="text-xl font-bold text-blue-800">0 ریال</p>
+                    </div>
+                    <div class="bg-white p-4 rounded-lg border border-blue-200">
+                        <h4 class="text-md font-semibold text-blue-700 mb-2">پس‌انداز ماهانه مورد نیاز</h4>
+                        <p id="monthlySavings" class="text-xl font-bold text-blue-800">0 ریال</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // تبدیل اعداد انگلیسی به فارسی
+        const persianDigits = ['۰', '۱', '۲', '۳', '۴', '۵', '۶', '۷', '۸', '۹'];
+        
+        function toPersianDigits(n) {
+            return n.toString().replace(/\d/g, x => persianDigits[x]);
+        }
+        
+        function formatNumber(num) {
+            return new Intl.NumberFormat('fa-IR').format(num);
+        }
+
+        // تبدیل عدد به حروف فارسی
+        const yekan = ['', 'یک', 'دو', 'سه', 'چهار', 'پنج', 'شش', 'هفت', 'هشت', 'نه'];
+        const dahgan = ['', '', 'بیست', 'سی', 'چهل', 'پنجاه', 'شصت', 'هفتاد', 'هشتاد', 'نود'];
+        const dah = ['ده', 'یازده', 'دوازده', 'سیزده', 'چهارده', 'پانزده', 'شانزده', 'هفده', 'هجده', 'نوزده'];
+        const sadgan = ['', 'صد', 'دویست', 'سیصد', 'چهارصد', 'پانصد', 'ششصد', 'هفتصد', 'هشتصد', 'نهصد'];
+        const basex = ['', 'هزار', 'میلیون', 'میلیارد', 'تریلیون'];
+
+        function numberToPersianWords(num) {
+            if (num === 0) return 'صفر';
+            
+            let result = '';
+            let base = 0;
+            
+            while (num > 0) {
+                const chunk = num % 1000;
+                if (chunk !== 0) {
+                    result = convertLessThanThousand(chunk) + (base > 0 ? ' ' + basex[base] + ' ' : '') + result;
+                }
+                num = Math.floor(num / 1000);
+                base++;
+            }
+            
+            return result.trim();
+        }
+
+        function convertLessThanThousand(num) {
+            let result = '';
+            
+            const hundreds = Math.floor(num / 100);
+            const remainder = num % 100;
+            
+            if (hundreds > 0) {
+                result += sadgan[hundreds];
+                if (remainder > 0) result += ' و ';
+            }
+            
+            if (remainder > 0) {
+                if (remainder < 10) {
+                    result += yekan[remainder];
+                } else if (remainder < 20) {
+                    result += dah[remainder - 10];
+                } else {
+                    const tens = Math.floor(remainder / 10);
+                    const ones = remainder % 10;
+                    
+                    result += dahgan[tens];
+                    if (ones > 0) {
+                        result += ' و ' + yekan[ones];
+                    }
+                }
+            }
+            
+            return result;
+        }
+
+        // تبدیل تاریخ میلادی به شمسی و بالعکس
+        function gregorianToJalali(gy, gm, gd) {
+            var g_d_m = [0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334];
+            var jy = (gy <= 1600) ? 0 : 979;
+            gy -= (gy <= 1600) ? 621 : 1600;
+            var gy2 = (gm > 2) ? (gy + 1) : gy;
+            var days = (365 * gy) + (parseInt((gy2 + 3) / 4)) - (parseInt((gy2 + 99) / 100)) + (parseInt((gy2 + 399) / 400)) - 80 + gd + g_d_m[gm - 1];
+            jy += 33 * (parseInt(days / 12053));
+            days %= 12053;
+            jy += 4 * (parseInt(days / 1461));
+            days %= 1461;
+            jy += parseInt((days - 1) / 365);
+            if (days > 365) days = (days - 1) % 365;
+            var jm = (days < 186) ? 1 + parseInt(days / 31) : 7 + parseInt((days - 186) / 30);
+            var jd = 1 + ((days < 186) ? (days % 31) : ((days - 186) % 30));
+            return [jy, jm, jd];
+        }
+
+        function jalaliToGregorian(jy, jm, jd) {
+            var gy = (jy <= 979) ? 621 : 1600;
+            jy -= (jy <= 979) ? 0 : 979;
+            var days = (365 * jy) + ((parseInt(jy / 33)) * 8) + (parseInt(((jy % 33) + 3) / 4)) + 78 + jd + ((jm < 7) ? (jm - 1) * 31 : ((jm - 7) * 30) + 186);
+            gy += 400 * (parseInt(days / 146097));
+            days %= 146097;
+            if (days > 36524) {
+                gy += 100 * (parseInt(--days / 36524));
+                days %= 36524;
+                if (days >= 365) days++;
+            }
+            gy += 4 * (parseInt((days) / 1461));
+            days %= 1461;
+            gy += parseInt((days - 1) / 365);
+            if (days > 365) days = (days - 1) % 365;
+            var gm = (days < 31) ? 1 : (days < 60) ? 2 : (days < 91) ? 3 : (days < 121) ? 4 : (days < 152) ? 5 : (days < 182) ? 6 : (days < 213) ? 7 : (days < 244) ? 8 : (days < 274) ? 9 : (days < 305) ? 10 : (days < 335) ? 11 : 12;
+            var gd = ((gm < 8 && gm % 2 === 0) || (gm > 7 && gm % 2 === 1)) ? (days - (31 * (gm - 1)) - ((gm > 2) ? parseInt((gm - 1) / 2) - ((gm > 8) ? 1 : 0) : 0)) : (days - (30 * (gm - 1)) - ((gm > 2) ? parseInt((gm - 1) / 2) - ((gm > 8) ? 1 : 0) : 0));
+            return [gy, gm, gd];
+        }
+
+        function isLeapJalaliYear(year) {
+            return ((year % 33) % 4) === 1;
+        }
+
+        function jalaliMonthLength(year, month) {
+            if (month <= 6) return 31;
+            if (month <= 11) return 30;
+            if (isLeapJalaliYear(year)) return 30;
+            return 29;
+        }
+
+        // نمایش پیام‌های اطلاع‌رسانی
+        function showToast(message, type = 'success') {
+            const toast = document.getElementById('toast');
+            toast.textContent = message;
+            toast.className = `toast ${type}`;
+            toast.classList.add('show');
+            
+            setTimeout(() => {
+                toast.classList.remove('show');
+            }, 3000);
+        }
+
+        // پیاده‌سازی تقویم شمسی
+        let currentJalaliDate = {};
+
+        // تنظیم تاریخ امروز به شمسی
+        const today = new Date();
+        const todayJalali = gregorianToJalali(today.getFullYear(), today.getMonth() + 1, today.getDate());
+        currentJalaliDate = {
+            jy: todayJalali[0],
+            jm: todayJalali[1],
+            jd: todayJalali[2]
+        };
+
+        // نمایش تقویم
+        function renderCalendar() {
+            const calendarDaysElement = document.getElementById('calendarDays');
+            const currentMonthYearElement = document.getElementById('currentMonthYear');
+            
+            // نام‌های ماه‌های شمسی
+            const jalaliMonths = [
+                'فروردین', 'اردیبهشت', 'خرداد', 'تیر', 'مرداد', 'شهریور',
+                'مهر', 'آبان', 'آذر', 'دی', 'بهمن', 'اسفند'
+            ];
+            
+            // نمایش ماه و سال فعلی
+            currentMonthYearElement.textContent = `${jalaliMonths[currentJalaliDate.jm - 1]} ${toPersianDigits(currentJalaliDate.jy)}`;
+            
+            // پاک کردن روزهای قبلی
+            while (calendarDaysElement.children.length > 7) {
+                calendarDaysElement.removeChild(calendarDaysElement.lastChild);
+            }
+            
+            // محاسبه روز اول ماه
+            const firstDayOfMonth = jalaliToGregorian(currentJalaliDate.jy, currentJalaliDate.jm, 1);
+            const firstDayDate = new Date(firstDayOfMonth[0], firstDayOfMonth[1] - 1, firstDayOfMonth[2]);
+            let dayOfWeek = (firstDayDate.getDay() + 1) % 7; // تبدیل به شنبه = 0، یکشنبه = 1، ...
+            
+            // اضافه کردن روزهای خالی قبل از روز اول ماه
+            for (let i = 0; i < dayOfWeek; i++) {
+                const emptyDay = document.createElement('div');
+                emptyDay.className = 'calendar-day other-month';
+                calendarDaysElement.appendChild(emptyDay);
+            }
+            
+            // اضافه کردن روزهای ماه
+            const daysInMonth = jalaliMonthLength(currentJalaliDate.jy, currentJalaliDate.jm);
+            for (let day = 1; day <= daysInMonth; day++) {
+                const dayElement = document.createElement('div');
+                dayElement.className = 'calendar-day';
+                dayElement.textContent = toPersianDigits(day);
+                
+                // بررسی روز انتخاب شده
+                if (day === currentJalaliDate.jd) {
+                    dayElement.classList.add('selected');
+                }
+                
+                // بررسی روز امروز
+                if (currentJalaliDate.jy === todayJalali[0] && 
+                    currentJalaliDate.jm === todayJalali[1] && 
+                    day === todayJalali[2]) {
+                    dayElement.classList.add('today');
+                }
+                
+                // اضافه کردن رویداد کلیک
+                dayElement.addEventListener('click', () => {
+                    // حذف کلاس selected از روز قبلی
+                    const selectedDay = document.querySelector('.calendar-day.selected');
+                    if (selectedDay) {
+                        selectedDay.classList.remove('selected');
+                    }
+                    
+                    // اضافه کردن کلاس selected به روز جدید
+                    dayElement.classList.add('selected');
+                    
+                    // به‌روزرسانی تاریخ انتخاب شده
+                    currentJalaliDate.jd = day;
+                    
+                    // نمایش تاریخ در فیلد ورودی
+                    document.getElementById('date').value = `${toPersianDigits(currentJalaliDate.jy)}/${toPersianDigits(currentJalaliDate.jm.toString().padStart(2, '0'))}/${toPersianDigits(day.toString().padStart(2, '0'))}`;
+                    
+                    // بستن تقویم
+                    document.getElementById('datePickerCalendar').classList.remove('show');
+                });
+                
+                calendarDaysElement.appendChild(dayElement);
+            }
+        }
+
+        // رویدادهای تقویم
+        document.getElementById('date').addEventListener('click', function(e) {
+            e.stopPropagation();
+            document.getElementById('datePickerCalendar').classList.toggle('show');
+            renderCalendar();
+        });
+
+        document.getElementById('prevMonth').addEventListener('click', function(e) {
+            e.stopPropagation();
+            if (currentJalaliDate.jm === 1) {
+                currentJalaliDate.jy--;
+                currentJalaliDate.jm = 12;
+            } else {
+                currentJalaliDate.jm--;
+            }
+            renderCalendar();
+        });
+
+        document.getElementById('nextMonth').addEventListener('click', function(e) {
+            e.stopPropagation();
+            if (currentJalaliDate.jm === 12) {
+                currentJalaliDate.jy++;
+                currentJalaliDate.jm = 1;
+            } else {
+                currentJalaliDate.jm++;
+            }
+            renderCalendar();
+        });
+
+        // بستن تقویم با کلیک خارج از آن
+        document.addEventListener('click', function(e) {
+            const datePicker = document.querySelector('.date-picker');
+            const calendar = document.getElementById('datePickerCalendar');
+            
+            if (!datePicker.contains(e.target)) {
+                calendar.classList.remove('show');
+            }
+        });
+
+        // جلوگیری از بسته شدن تقویم با کلیک روی خود تقویم
+        document.getElementById('datePickerCalendar').addEventListener('click', function(e) {
+            e.stopPropagation();
+        });
+
+        // تنظیم تاریخ امروز در فیلد ورودی
+        document.getElementById('date').value = `${toPersianDigits(todayJalali[0])}/${toPersianDigits(todayJalali[1].toString().padStart(2, '0'))}/${toPersianDigits(todayJalali[2].toString().padStart(2, '0'))}`;
+
+        // مدیریت چک‌ها با ذخیره‌سازی در localStorage
+        let checks = [];
+
+        // بارگذاری چک‌ها از localStorage
+        function loadChecks() {
+            const savedChecks = localStorage.getItem('bankChecks');
+            if (savedChecks) {
+                checks = JSON.parse(savedChecks);
+                
+                // تبدیل رشته‌های تاریخ به اشیاء Date
+                checks.forEach(check => {
+                    if (check.gregorianDateStr) {
+                        check.gregorianDate = new Date(check.gregorianDateStr);
+                    }
+                });
+                
+                renderChecks();
+                updateStats();
+            }
+        }
+
+        // ذخیره چک‌ها در localStorage
+        function saveChecks() {
+            // تبدیل اشیاء Date به رشته قبل از ذخیره‌سازی
+            const checksToSave = checks.map(check => {
+                const checkCopy = {...check};
+                if (checkCopy.gregorianDate) {
+                    checkCopy.gregorianDateStr = checkCopy.gregorianDate.toISOString();
+                    delete checkCopy.gregorianDate;
+                }
+                return checkCopy;
+            });
+            
+            localStorage.setItem('bankChecks', JSON.stringify(checksToSave));
+        }
+
+        // بارگذاری چک‌ها در هنگام بارگذاری صفحه
+        loadChecks();
+
+        document.getElementById('amount').addEventListener('input', function() {
+            const amount = parseInt(this.value) || 0;
+            const amountInWords = amount > 0 ? numberToPersianWords(amount) + ' ریال' : '';
+            document.getElementById('amountInWords').textContent = amountInWords;
+        });
+
+        document.getElementById('checkForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const jalaliDateStr = document.getElementById('date').value;
+            const amount = parseInt(document.getElementById('amount').value);
+            const issuer = document.getElementById('issuer').value.trim();
+            const receiver = document.getElementById('receiver').value.trim();
+            
+            if (!jalaliDateStr || !amount || !issuer || !receiver) {
+                showToast('لطفاً تمام فیلدها را پر کنید.', 'error');
+                return;
+            }
+            
+            // تبدیل رشته تاریخ شمسی به اجزای آن
+            const jalaliParts = jalaliDateStr.split('/').map(part => parseInt(part.replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d))));
+            
+            // تبدیل تاریخ شمسی به میلادی
+            const gregorianDate = jalaliToGregorian(jalaliParts[0], jalaliParts[1], jalaliParts[2]);
+            const gregorianDateObj = new Date(gregorianDate[0], gregorianDate[1] - 1, gregorianDate[2]);
+            
+            const amountInWords = numberToPersianWords(amount) + ' ریال';
+            
+            const check = {
+                id: Date.now(),
+                jalaliDate: jalaliDateStr,
+                gregorianDate: gregorianDateObj,
+                amount,
+                amountInWords,
+                issuer,
+                receiver
+            };
+            
+            checks.push(check);
+            saveChecks();
+            renderChecks();
+            updateStats();
+            
+            showToast('چک با موفقیت ثبت شد.');
+            
+            // پاک کردن فرم
+            document.getElementById('checkForm').reset();
+            document.getElementById('amountInWords').textContent = '';
+            
+            // تنظیم مجدد تاریخ به امروز
+            document.getElementById('date').value = `${toPersianDigits(todayJalali[0])}/${toPersianDigits(todayJalali[1].toString().padStart(2, '0'))}/${toPersianDigits(todayJalali[2].toString().padStart(2, '0'))}`;
+            currentJalaliDate = {
+                jy: todayJalali[0],
+                jm: todayJalali[1],
+                jd: todayJalali[2]
+            };
+        });
+
+        function renderChecks() {
+            const checksList = document.getElementById('checksList');
+            const noChecks = document.getElementById('noChecks');
+            
+            if (checks.length === 0) {
+                checksList.innerHTML = '';
+                noChecks.classList.remove('hidden');
+                return;
+            }
+            
+            noChecks.classList.add('hidden');
+            
+            // مرتب‌سازی چک‌ها بر اساس تاریخ سررسید
+            const sortedChecks = [...checks].sort((a, b) => {
+                return new Date(a.gregorianDate) - new Date(b.gregorianDate);
+            });
+            
+            checksList.innerHTML = sortedChecks.map((check, index) => `
+                <tr class="${index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}">
+                    <td class="py-3 px-4">${toPersianDigits(index + 1)}</td>
+                    <td class="py-3 px-4">${check.jalaliDate}</td>
+                    <td class="py-3 px-4">${check.issuer}</td>
+                    <td class="py-3 px-4">${check.receiver}</td>
+                    <td class="py-3 px-4">${formatNumber(check.amount)}</td>
+                    <td class="py-3 px-4">${check.amountInWords}</td>
+                    <td class="py-3 px-4">
+                        <button onclick="deleteCheck(${check.id})" class="bg-red-500 hover:bg-red-600 text-white py-1 px-3 rounded-md text-sm">
+                            حذف
+                        </button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        function deleteCheck(id) {
+            checks = checks.filter(check => check.id !== id);
+            saveChecks();
+            renderChecks();
+            updateStats();
+            showToast('چک با موفقیت حذف شد.');
+        }
+
+        document.getElementById('clearAllChecks').addEventListener('click', function() {
+            if (checks.length === 0) {
+                showToast('چکی برای حذف وجود ندارد.', 'error');
+                return;
+            }
+            
+            if (confirm('آیا از حذف تمام چک‌ها اطمینان دارید؟')) {
+                checks = [];
+                saveChecks();
+                renderChecks();
+                updateStats();
+                showToast('تمام چک‌ها با موفقیت حذف شدند.');
+            }
+        });
+
+        function updateStats() {
+            const statsContainer = document.getElementById('statsContainer');
+            const personStats = document.getElementById('personStats');
+            
+            if (checks.length === 0) {
+                statsContainer.classList.add('hidden');
+                personStats.classList.add('hidden');
+                return;
+            }
+            
+            statsContainer.classList.remove('hidden');
+            
+            // آمار کلی
+            const totalChecks = checks.length;
+            const totalAmount = checks.reduce((sum, check) => sum + check.amount, 0);
+            const averageAmount = Math.round(totalAmount / totalChecks);
+            
+            document.getElementById('totalChecks').textContent = toPersianDigits(totalChecks);
+            document.getElementById('totalAmount').textContent = formatNumber(totalAmount) + ' ریال';
+            document.getElementById('averageAmount').textContent = formatNumber(averageAmount) + ' ریال';
+            
+            // بررسی چک‌های با صادرکننده و دریافت‌کننده یکسان
+            const personMap = new Map();
+            
+            checks.forEach(check => {
+                if (check.issuer === check.receiver) {
+                    if (!personMap.has(check.issuer)) {
+                        personMap.set(check.issuer, {
+                            checks: [],
+                            totalAmount: 0
+                        });
+                    }
+                    
+                    const personData = personMap.get(check.issuer);
+                    personData.checks.push(check);
+                    personData.totalAmount += check.amount;
+                }
+            });
+            
+            // نمایش آمار شخص با بیشترین چک (اگر وجود داشته باشد)
+            if (personMap.size > 0) {
+                let maxPerson = '';
+                let maxChecks = 0;
+                
+                personMap.forEach((data, person) => {
+                    if (data.checks.length > maxChecks) {
+                        maxPerson = person;
+                        maxChecks = data.checks.length;
+                    }
+                });
+                
+                const personData = personMap.get(maxPerson);
+                
+                // محاسبه میانگین پس‌انداز ماهانه
+                let monthlySavings = 0;
+                
+                if (personData.checks.length > 0) {
+                    const today = new Date();
+                    let totalMonths = 0;
+                    
+                    personData.checks.forEach(check => {
+                        const checkDate = new Date(check.gregorianDate);
+                        const monthsDiff = (checkDate.getFullYear() - today.getFullYear()) * 12 + 
+                                          (checkDate.getMonth() - today.getMonth());
+                        
+                        if (monthsDiff > 0) {
+                            totalMonths += monthsDiff;
+                        }
+                    });
+                    
+                    if (totalMonths > 0) {
+                        monthlySavings = Math.ceil(personData.totalAmount / totalMonths);
+                    } else {
+                        monthlySavings = personData.totalAmount;
+                    }
+                }
+                
+                personStats.classList.remove('hidden');
+                document.getElementById('personName').textContent = maxPerson;
+                document.getElementById('personTotalChecks').textContent = toPersianDigits(personData.checks.length);
+                document.getElementById('personTotalAmount').textContent = formatNumber(personData.totalAmount) + ' ریال';
+                document.getElementById('monthlySavings').textContent = formatNumber(monthlySavings) + ' ریال';
+            } else {
+                personStats.classList.add('hidden');
+            }
+        }
+
+        // تعریف تابع deleteCheck در سطح window برای دسترسی از HTML
+        window.deleteCheck = deleteCheck;
+    </script>
+<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'94ec1cc070b7194b',t:'MTc0OTc2MDI5Mi4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+</html>
