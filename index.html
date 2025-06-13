@@ -106,7 +106,7 @@
     <div class="container mx-auto px-4 py-8">
         <header class="text-center mb-8">
             <h1 class="text-3xl font-bold text-indigo-800 mb-2">سیستم مدیریت چک بانکی</h1>
-            <p class="text-gray-600">ثبت و مدیریت چک‌های بانکی به همراه محاسبه میانگین پس‌انداز</p>
+            <p class="text-gray-600">ثبت و مدیریت چک‌های بانکی به همراه محاسبه راس چک</p>
         </header>
 
         <div class="bg-white rounded-lg shadow-lg p-6 mb-8">
@@ -204,6 +204,15 @@
                     <div class="bg-indigo-50 p-4 rounded-lg border border-indigo-200">
                         <h3 class="text-lg font-semibold text-indigo-700 mb-2">میانگین مبلغ چک‌ها</h3>
                         <p id="averageAmount" class="text-2xl font-bold text-indigo-800">0 ریال</p>
+                    </div>
+                </div>
+                
+                <!-- بخش راس چک - فقط با یک باکس -->
+                <div class="bg-blue-50 p-5 rounded-lg border border-blue-200 mb-6">
+                    <h3 class="text-lg font-semibold text-blue-800 mb-4">محاسبه راس چک</h3>
+                    <div class="bg-white p-4 rounded-lg border border-blue-200 mx-auto max-w-md">
+                        <h4 class="text-md font-semibold text-blue-700 mb-2">تاریخ راس چک</h4>
+                        <p id="checkEquivalentDate" class="text-xl font-bold text-blue-800">-</p>
                     </div>
                 </div>
             </div>
@@ -347,6 +356,11 @@
             return 29;
         }
 
+        // تبدیل تاریخ شمسی به رشته
+        function formatJalaliDate(jy, jm, jd) {
+            return `${toPersianDigits(jy)}/${toPersianDigits(jm.toString().padStart(2, '0'))}/${toPersianDigits(jd.toString().padStart(2, '0'))}`;
+        }
+
         // نمایش پیام‌های اطلاع‌رسانی
         function showToast(message, type = 'success') {
             const toast = document.getElementById('toast');
@@ -436,7 +450,7 @@
                     currentJalaliDate.jd = day;
                     
                     // نمایش تاریخ در فیلد ورودی
-                    document.getElementById('date').value = `${toPersianDigits(currentJalaliDate.jy)}/${toPersianDigits(currentJalaliDate.jm.toString().padStart(2, '0'))}/${toPersianDigits(day.toString().padStart(2, '0'))}`;
+                    document.getElementById('date').value = formatJalaliDate(currentJalaliDate.jy, currentJalaliDate.jm, day);
                     
                     // بستن تقویم
                     document.getElementById('datePickerCalendar').classList.remove('show');
@@ -491,7 +505,7 @@
         });
 
         // تنظیم تاریخ امروز در فیلد ورودی
-        document.getElementById('date').value = `${toPersianDigits(todayJalali[0])}/${toPersianDigits(todayJalali[1].toString().padStart(2, '0'))}/${toPersianDigits(todayJalali[2].toString().padStart(2, '0'))}`;
+        document.getElementById('date').value = formatJalaliDate(todayJalali[0], todayJalali[1], todayJalali[2]);
 
         // مدیریت چک‌ها با ذخیره‌سازی در localStorage
         let checks = [];
@@ -582,7 +596,7 @@
             document.getElementById('amountInWords').textContent = '';
             
             // تنظیم مجدد تاریخ به امروز
-            document.getElementById('date').value = `${toPersianDigits(todayJalali[0])}/${toPersianDigits(todayJalali[1].toString().padStart(2, '0'))}/${toPersianDigits(todayJalali[2].toString().padStart(2, '0'))}`;
+            document.getElementById('date').value = formatJalaliDate(todayJalali[0], todayJalali[1], todayJalali[2]);
             currentJalaliDate = {
                 jy: todayJalali[0],
                 jm: todayJalali[1],
@@ -647,6 +661,41 @@
             }
         });
 
+        // محاسبه راس چک
+        function calculateCheckEquivalentDate() {
+            if (checks.length === 0) return null;
+            
+            // محاسبه مجموع مبالغ
+            const totalAmount = checks.reduce((sum, check) => sum + check.amount, 0);
+            
+            // محاسبه میانگین وزنی تاریخ‌ها بر اساس مبلغ
+            let weightedDateSum = 0;
+            
+            checks.forEach(check => {
+                // وزن هر چک بر اساس مبلغ آن
+                const weight = check.amount / totalAmount;
+                // تاریخ به میلی‌ثانیه
+                const dateValue = check.gregorianDate.getTime();
+                // جمع وزنی
+                weightedDateSum += dateValue * weight;
+            });
+            
+            // تبدیل میانگین وزنی به تاریخ
+            const equivalentDate = new Date(Math.round(weightedDateSum));
+            
+            // تبدیل به تاریخ شمسی
+            const jalaliDate = gregorianToJalali(
+                equivalentDate.getFullYear(),
+                equivalentDate.getMonth() + 1,
+                equivalentDate.getDate()
+            );
+            
+            return {
+                gregorianDate: equivalentDate,
+                jalaliDate: jalaliDate
+            };
+        }
+
         function updateStats() {
             const statsContainer = document.getElementById('statsContainer');
             const personStats = document.getElementById('personStats');
@@ -667,6 +716,19 @@
             document.getElementById('totalChecks').textContent = toPersianDigits(totalChecks);
             document.getElementById('totalAmount').textContent = formatNumber(totalAmount) + ' ریال';
             document.getElementById('averageAmount').textContent = formatNumber(averageAmount) + ' ریال';
+            
+            // محاسبه راس چک
+            const equivalentDate = calculateCheckEquivalentDate();
+            if (equivalentDate) {
+                const jalaliDateStr = formatJalaliDate(
+                    equivalentDate.jalaliDate[0],
+                    equivalentDate.jalaliDate[1],
+                    equivalentDate.jalaliDate[2]
+                );
+                document.getElementById('checkEquivalentDate').textContent = jalaliDateStr;
+            } else {
+                document.getElementById('checkEquivalentDate').textContent = '-';
+            }
             
             // بررسی چک‌های با صادرکننده و دریافت‌کننده یکسان
             const personMap = new Map();
@@ -737,5 +799,5 @@
         // تعریف تابع deleteCheck در سطح window برای دسترسی از HTML
         window.deleteCheck = deleteCheck;
     </script>
-<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'94ec1cc070b7194b',t:'MTc0OTc2MDI5Mi4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'94f075a664679991',t:'MTc0OTgwNTg3Ni4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 </html>
